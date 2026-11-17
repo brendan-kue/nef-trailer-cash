@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <link rel="icon" href="nef_banner.png"><title>NEF Trailer Cash · Admin</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400&display=swap" />
+    <link rel="stylesheet" href="hark.css" />
+    <link rel="stylesheet" href="hark-hero.css" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="page" id="top">
+      <main class="main">
+        <div class="x-banner" id="setup-banner" role="alert" hidden>Setup pending: Firebase not connected yet</div>
+
+        <div class="x-hud" id="hud" hidden>
+          <div class="x-hud__group">
+            <span class="x-hi">Admin · <b id="hud-email"></b></span>
+          </div>
+          <div class="x-hud__group">
+            <button class="x-ghost" id="hud-logout" type="button">Log out</button>
+          </div>
+        </div>
+
+        <section class="section" id="loading">
+          <div class="x-loading" role="status">
+            <span class="x-spinner" aria-hidden="true"></span>
+            <p id="loading-msg">Loading…</p>
+          </div>
+        </section>
+
+        <section class="section" id="login" hidden>
+          <div class="head">
+            <p class="head__eyebrow">NEF Trailer Cash</p>
+            <h2 tabindex="-1">Admin log in</h2>
+          </div>
+          <div class="x-panel">
+            <form class="x-form" id="login-form" novalidate>
+              <div class="x-field">
+                <label for="li-email">Email</label>
+                <input class="x-input" id="li-email" type="email" autocomplete="email" inputmode="email" aria-describedby="li-err" />
+              </div>
+              <div class="x-field">
+                <label for="li-pass">Password</label>
+                <input class="x-input" id="li-pass" type="password" autocomplete="current-password" aria-describedby="li-err" />
+              </div>
+              <p class="x-err" id="li-err" role="alert"></p>
+              <button class="x-cta" id="li-submit" type="submit" data-auth>Log in</button>
+            </form>
+          </div>
+        </section>
+
+        <section class="section" id="denied" hidden>
+          <div class="head">
+            <h2 tabindex="-1">Not an admin</h2>
+            <p class="head__sub" id="denied-msg">This account doesn't have admin access.</p>
+          </div>
+          <div class="x-center">
+            <button class="x-ghost" id="denied-logout" type="button">Log out</button>
+          </div>
+        </section>
+
+        <section class="section" id="admin" hidden>
+          <div class="head">
+            <p class="head__eyebrow">Payouts</p>
+            <h2 tabindex="-1">Withdrawal requests</h2>
+            <p class="head__sub" id="admin-sub">Newest first.</p>
+          </div>
+          <section class="stats">
+            <div class="stat"><span class="stat__fig x-gold" id="st-pending">0</span><span class="stat__label">Pending</span></div>
+            <div class="stat"><span class="stat__fig" id="st-pending-amt">R0.00</span><span class="stat__label">Pending total</span></div>
+          </section>
+          <p class="x-note" id="admin-empty">No withdrawals yet.</p>
+          <p class="x-err" id="admin-err" role="alert"></p>
+          <div class="table-wrap" id="admin-wrap" hidden>
+            <table>
+              <thead>
+                <tr><th scope="col">Date</th><th scope="col">User</th><th scope="col">Method</th><th scope="col">Detail</th><th scope="col">Amount</th><th scope="col">Status</th><th scope="col">Action</th></tr>
+              </thead>
+              <tbody id="admin-rows"></tbody>
+            </table>
+          </div>
+          <p class="fineprint">Rejecting a request does not return the user's coins: the security rules don't let admins change user balances. Refund coins manually in the Firebase console if needed.</p>
+        </section>
+      </main>
+      <div class="x-toast" id="toast" role="status" aria-live="polite"></div>
+      <footer class="foot">
+        <p>Coins are rewards; payouts are processed manually within 48 hours on weekdays.</p>
+        <p><a href="privacy.html">Privacy</a></p>
+      </footer>
+    </div>
+    <script src="hark.js"></script>
+    <script type="module" src="admin.js"></script>
+  </body>
+</html>

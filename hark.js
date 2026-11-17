@@ -87,13 +87,11 @@
   function behaviors() {
     var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     var btn = doc.getElementById("theme-btn"), mq = window.matchMedia("(prefers-color-scheme: dark)");
-    try { var saved = localStorage.getItem("hark-theme"); if (saved === "light" || saved === "dark") root.setAttribute("data-theme", saved); } catch (e) { /* storage blocked: follow the system theme */ }
     function current() { var t = root.getAttribute("data-theme"); return t === "light" || t === "dark" ? t : (mq.matches ? "dark" : "light"); }
     function label() { if (btn) btn.setAttribute("aria-label", current() === "dark" ? "Switch to light theme" : "Switch to dark theme"); }
     if (btn) btn.addEventListener("click", function () {
       var next = current() === "dark" ? "light" : "dark";
       root.setAttribute("data-theme", next);
-      try { localStorage.setItem("hark-theme", next); } catch (e) { /* storage blocked: the choice lasts this visit */ }
       label();
     });
     label();
