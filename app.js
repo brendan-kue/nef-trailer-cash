@@ -185,7 +185,7 @@ for (let i = 1; i <= 5; i++) {
   b.setAttribute("aria-pressed", "false");
   b.innerHTML = STAR_SVG;
   b.dataset.value = i;
-  b.addEventListener("click", () => pick(i));
+  b.addEventListener("click", () => { if (!watch.unlocked) return; pick(i); });
   $("stars").appendChild(b);
   stars.push(b);
 }
@@ -198,26 +198,98 @@ function pick(v) {
   $("rate-pick").textContent = v + (v === 1 ? " star" : " stars") + " · " + WORDS[v];
   $("collect-btn").disabled = false;
 }
+/* ---------- Watch gate: stars unlock near the end of the trailer ---------- */
+const UNLOCK_SHARE = 0.85;      // must have actually watched 85% of the trailer
+const END_WINDOW = 15;          // and be within the last 15 seconds
+const FALLBACK_SECS = 120;      // if the YouTube API can't load, unlock after 2 minutes
+const watch = { unlocked: false, watched: 0, last: null, timer: null, player: null, fallback: null };
+let ytReady = null;
+function loadYT() {
+  if (ytReady) return ytReady;
+  ytReady = new Promise((resolve, reject) => {
+    if (window.YT && window.YT.Player) return resolve(window.YT);
+    const prev = window.onYouTubeIframeAPIReady;
+    window.onYouTubeIframeAPIReady = () => { if (prev) prev(); resolve(window.YT); };
+    const tag = document.createElement("script");
+    tag.src = "https://www.youtube.com/iframe_api";
+    tag.onerror = () => reject(new Error("yt"));
+    document.head.appendChild(tag);
+    setTimeout(() => reject(new Error("yt-timeout")), 10000);
+  });
+  return ytReady;
+}
+function fmt(sec) { sec = Math.max(0, Math.ceil(sec)); return Math.floor(sec / 60) + ":" + String(sec % 60).padStart(2, "0"); }
+function setLocked(locked, msg) {
+  watch.unlocked = !locked;
+  $("stars").classList.toggle("is-locked", locked);
+  stars.forEach((s) => { s.disabled = locked; });
+  $("rate-label").textContent = locked ? "Watch to the end to rate" : "Rate this trailer";
+  if (locked) $("rate-pick").textContent = msg || "Stars unlock as the trailer ends";
+  else if (!state.current) $("rate-pick").textContent = "Stars unlocked. How was it?";
+}
+function stopWatch() {
+  clearInterval(watch.timer); watch.timer = null;
+  clearTimeout(watch.fallback); watch.fallback = null;
+}
+function unlockStars() { if (watch.unlocked) return; stopWatch(); setLocked(false); }
+function tick() {
+  const pl = watch.player;
+  if (!pl || typeof pl.getCurrentTime !== "function") return;
+  const dur = pl.getDuration() || 0, cur = pl.getCurrentTime() || 0;
+  const playing = pl.getPlayerState && pl.getPlayerState() === 1;
+  if (playing && watch.last !== null) {
+    const d = cur - watch.last;
+    if (d > 0 && d < 1.5) watch.watched += d;   // count only real playback, not skips
+  }
+  watch.last = cur;
+  if (!dur) return;
+  const need = dur * UNLOCK_SHARE;
+  if (watch.watched >= need && cur >= dur - END_WINDOW) { unlockStars(); return; }
+  if (watch.watched < need) $("rate-pick").textContent = "Keep watching · stars unlock in " + fmt(need - watch.watched);
+  else $("rate-pick").textContent = "Almost there · watch to the end";
+}
+function startWatch(id) {
+  stopWatch();
+  watch.watched = 0; watch.last = null;
+  setLocked(true);
+  loadYT().then((YT) => {
+    const opts = { videoId: id, playerVars: { rel: 0, playsinline: 1, modestbranding: 1 },
+      events: { onStateChange: (e) => { if (e.data === 0) unlockStars(); } } };
+    if (watch.player && typeof watch.player.loadVideoById === "function") {
+      watch.player.cueVideoById(id);
+    } else {
+      const old = $("player");
+      if (old && old.tagName === "IFRAME") { const d = document.createElement("div"); d.id = "player"; old.replaceWith(d); }
+      watch.player = new YT.Player("player", opts);
+    }
+    watch.timer = setInterval(tick, 500);
+  }).catch(() => {
+    // API blocked: plain embed, unlock after a fixed time
+    const f = $("player");
+    if (f && f.tagName === "IFRAME") f.src = "https://www.youtube-nocookie.com/embed/" + id + "?rel=0&playsinline=1";
+    $("rate-pick").textContent = "Stars unlock in " + fmt(FALLBACK_SECS);
+    watch.fallback = setTimeout(unlockStars, FALLBACK_SECS * 1000);
+  });
+}
 function loadTrailer() {
   const t = TRAILERS[state.playIndex];
   state.current = 0;
   $("play-eyebrow").textContent = "Trailer " + (state.playIndex + 1) + " of " + DAILY;
   $("play-title").textContent = t.title;
   const f = $("player");
-  f.title = t.title + " trailer";
-  f.src = "https://www.youtube-nocookie.com/embed/" + t.id + "?rel=0&playsinline=1";
+  if (f && f.tagName === "IFRAME") f.title = t.title + " trailer";
   stars.forEach((s) => { s.classList.remove("is-on"); s.setAttribute("aria-pressed", "false"); });
-  $("rate-pick").textContent = "";
   const c = $("collect-btn");
   c.disabled = true;
   c.textContent = "Collect " + REWARD + " coins";
+  startWatch(t.id);
 }
 
 class GameError extends Error { constructor(code) { super(code); this.code = code; } }
 
 // One rated trailer = one transaction on users/{uid}: day, coins+50, ratings+1, updatedAt.
 async function collect() {
-  if (!state.current || !auth.currentUser) return;
+  if (!state.current || !auth.currentUser || !watch.unlocked) return;
   const { runTransaction, doc, serverTimestamp } = fb.fs;
   const c = $("collect-btn");
   c.disabled = true;

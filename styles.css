@@ -297,3 +297,8 @@ html { background-color: var(--x-navy); }
 .x-prose { display: grid; gap: 12px; max-width: 70ch; }
 .x-prose h3 { color: var(--x-gold); margin-top: 8px; }
 .x-prose a { color: var(--x-gold); }
+
+.x-stars.is-locked .x-star { opacity: 0.35; cursor: not-allowed; }
+.x-stars.is-locked .x-star:active { transform: none; }
+@media (hover: hover) { .x-stars.is-locked:hover .x-star { color: rgb(255 255 255 / 0.22); } }
+.x-video > div, .x-video iframe { width: 100%; height: 100%; }
