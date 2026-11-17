@@ -470,6 +470,7 @@ function authMessage(e) {
     case "auth/weak-password": return "Password must be at least 6 characters.";
     case "auth/network-request-failed": return "Network problem. Check your connection and try again.";
     case "auth/operation-not-allowed": return "Email sign-in isn't enabled yet. Please try again later.";
+    case "auth/configuration-not-found": return "Sign-in isn't set up on the server yet. Please try again later.";
     case "auth/unauthorized-domain": return "This website isn't authorised for sign-in yet.";
     case "auth/missing-email": return "Enter your email first.";
     default: return "Something went wrong. Please try again.";
