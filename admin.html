@@ -84,6 +84,18 @@
               <tbody id="admin-rows"></tbody>
             </table>
           </div>
+          <div class="head" style="margin-top: 32px">
+            <h2 tabindex="-1">Sponsored ads</h2>
+            <p class="head__sub">Rated views per advertiser. Send these numbers to the business as proof.</p>
+          </div>
+          <p class="x-note" id="ads-empty">No sponsored views yet.</p>
+          <div class="table-wrap" id="ads-wrap" hidden>
+            <table>
+              <thead><tr><th scope="col">Sponsor</th><th scope="col">Rated views</th><th scope="col">Average stars</th><th scope="col">Dates</th></tr></thead>
+              <tbody id="ads-rows"></tbody>
+            </table>
+          </div>
+          <p><button class="x-ghost" id="ads-refresh" type="button">Refresh ad report</button></p>
           <p class="fineprint">Rejecting a request does not return the user's coins: the security rules don't let admins change user balances. Refund coins manually in the Firebase console if needed.</p>
         </section>
       </main>

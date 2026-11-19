@@ -1,6 +1,7 @@
 // NEF Trailer Cash: Firebase Auth + Firestore client.
 // Every Firestore write below is shaped to match firestore.rules exactly; see README.md.
 import { firebaseConfig } from "./config.js";
+import { SPONSORS } from "./sponsors.js";
 
 const SDK = "https://www.gstatic.com/firebasejs/10.12.2/";
 
@@ -42,6 +43,22 @@ function nextWeekday() {
 // Same week number as the rules: weeks start Monday, SA time.
 function weekNum(ms) { return Math.floor((Math.floor(((ms === undefined ? Date.now() : ms) + 7200000) / 86400000) + 3) / 7); }
 function weekFullOf(d) { return d && d.week === weekNum() ? d.weekFull || 0 : 0; }
+// Today's lineup: trailer 3 becomes the active sponsor's video, if any.
+const SPONSOR_SLOT = 2;
+function activeSponsor() {
+  const t = todayNum();
+  return SPONSORS.find((s) => s && s.id && s.key && t >= s.start && t <= s.end) || null;
+}
+function lineup() {
+  const l = TRAILERS.slice();
+  const s = activeSponsor();
+  if (s) l[SPONSOR_SLOT] = { title: s.title || s.business, id: s.id, sponsor: s };
+  return l;
+}
+function findItem(id) {
+  return lineup().find((m) => m.id === id) || TRAILERS.find((m) => m.id === id)
+    || SPONSORS.filter((s) => s.id === id).map((s) => ({ title: s.title || s.business, id: s.id, sponsor: s }))[0];
+}
 function fmtDay(d) { return DAYS[d.getUTCDay()] + ", " + d.getUTCDate() + " " + MONTHS[d.getUTCMonth()] + " " + d.getUTCFullYear(); }
 
 /* ---------- DOM helpers ---------- */
@@ -278,10 +295,14 @@ function startWatch(id) {
   });
 }
 function loadTrailer() {
-  const t = TRAILERS[state.playIndex];
+  const t = lineup()[state.playIndex];
   state.current = 0;
-  $("play-eyebrow").textContent = "Trailer " + (state.playIndex + 1) + " of " + DAILY;
+  $("play-eyebrow").textContent = (t.sponsor ? "Sponsored · " : "Trailer ") + (state.playIndex + 1) + " of " + DAILY;
   $("play-title").textContent = t.title;
+  $("rate-label").textContent = t.sponsor ? "Rate this ad" : "Rate this trailer";
+  const sl = $("sponsor-link");
+  if (t.sponsor && t.sponsor.link) { sl.href = t.sponsor.link; sl.textContent = "Visit " + t.sponsor.business; sl.hidden = false; }
+  else sl.hidden = true;
   const f = $("player");
   if (f && f.tagName === "IFRAME") f.title = t.title + " trailer";
   stars.forEach((s) => { s.classList.remove("is-on"); s.setAttribute("aria-pressed", "false"); });
@@ -300,7 +321,7 @@ async function collect() {
   const c = $("collect-btn");
   c.disabled = true;
   c.textContent = "Saving…";
-  const t = TRAILERS[state.playIndex];
+  const t = lineup()[state.playIndex];
   const starsGiven = state.current;
   const ref = doc(db, "users", auth.currentUser.uid);
   let earned = REWARD;
@@ -328,6 +349,12 @@ async function collect() {
         upd.fullDays = (d.fullDays || 0) + 1;
       }
       tx.update(ref, upd);
+      // Proof of view for the advertiser: one doc per sponsor, user and day.
+      if (t.sponsor) {
+        tx.set(doc(db, "adviews", t.sponsor.key + "_" + auth.currentUser.uid + "_" + today), {
+          sponsor: t.sponsor.key, uid: auth.currentUser.uid, stars: starsGiven, day: today, createdAt: serverTimestamp()
+        });
+      }
     });
   } catch (e) {
     const code = e && e.code;
@@ -371,7 +398,7 @@ function cashout() {
   const body = $("recap");
   body.innerHTML = "";
   r.forEach((x) => {
-    const t = TRAILERS.find((m) => m.id === x.id);
+    const t = findItem(x.id);
     const tr = document.createElement("tr");
     const th = document.createElement("th");
     th.scope = "row";

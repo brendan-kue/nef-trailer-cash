@@ -171,6 +171,40 @@ function listen() {
   });
 }
 
+/* ---------- Sponsored-ad report ---------- */
+async function loadAds() {
+  const { collection, getDocs } = fb.fs;
+  const body = $("ads-rows");
+  try {
+    const qs = await getDocs(collection(db, "adviews"));
+    const agg = new Map();
+    qs.forEach((d) => {
+      const v = d.data();
+      const g = agg.get(v.sponsor) || { views: 0, stars: 0, first: v.day, last: v.day };
+      g.views++; g.stars += v.stars || 0;
+      g.first = Math.min(g.first, v.day); g.last = Math.max(g.last, v.day);
+      agg.set(v.sponsor, g);
+    });
+    body.innerHTML = "";
+    const day = (n) => String(n).replace(/(\d{4})(\d{2})(\d{2})/, "$3/$2/$1");
+    agg.forEach((g, k) => {
+      const tr = document.createElement("tr");
+      [k, g.views, (g.stars / g.views).toFixed(1) + " / 5", day(g.first) + " – " + day(g.last)].forEach((t, i) => {
+        const c = document.createElement(i ? "td" : "th");
+        if (!i) c.scope = "row";
+        c.textContent = t;
+        tr.appendChild(c);
+      });
+      body.appendChild(tr);
+    });
+    $("ads-empty").hidden = agg.size > 0;
+    $("ads-wrap").hidden = agg.size === 0;
+  } catch (e) {
+    $("ads-empty").textContent = "Couldn't load ad views: " + ((e && e.code) || "error");
+  }
+}
+$("ads-refresh").addEventListener("click", loadAds);
+
 /* ---------- Auth ---------- */
 $("login-form").addEventListener("submit", async (ev) => {
   ev.preventDefault();
@@ -239,6 +273,7 @@ async function boot() {
     }
     if (!isAdmin) { show("denied"); return; }
     show("admin");
+    loadAds();
     listen();
   });
 }
