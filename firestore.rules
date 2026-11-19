@@ -9,6 +9,8 @@ service cloud.firestore {
     function sa() { return request.time + duration.value(2, 'h'); }
     function todayNum() { return sa().year() * 10000 + sa().month() * 100 + sa().day(); }
     function weekday() { return sa().dayOfWeek() <= 5; }
+    // Week number in SA time, weeks start Monday (day 0 = Thu 1 Jan 1970).
+    function weekNum() { return math.floor((math.floor((request.time.toMillis() + 7200000) / 86400000.0) + 3) / 7.0); }
 
     match /admins/{uid} {
       allow read: if signedIn() && request.auth.uid == uid;
@@ -19,18 +21,37 @@ service cloud.firestore {
       function old() { return resource.data; }
       function nu() { return request.resource.data; }
       function onlyKeys() {
-        return nu().diff(old()).affectedKeys().hasOnly(['coins', 'day', 'ratings', 'name', 'phone', 'lastWithdrawal', 'updatedAt']);
+        return nu().diff(old()).affectedKeys().hasOnly(['coins', 'day', 'ratings', 'name', 'phone', 'lastWithdrawal', 'updatedAt', 'week', 'weekFull', 'fullDays']);
+      }
+      // Coin rules: 10 per trailer; +25 for the 5th trailer of the day;
+      // +50 more when that completes a 5th full day in the same Mon-Fri week.
+      function streakSame() {
+        return nu().get('week', 0) == old().get('week', 0)
+          && nu().get('weekFull', 0) == old().get('weekFull', 0)
+          && nu().get('fullDays', 0) == old().get('fullDays', 0);
+      }
+      function weekFullNow() {
+        return (old().get('week', 0) == weekNum() ? old().get('weekFull', 0) : 0) + 1;
+      }
+      function earnCoins() {
+        return nu().ratings.size() < 5
+          ? (nu().coins == old().coins + 10 && streakSame())
+          : (nu().week == weekNum()
+              && nu().weekFull == weekFullNow()
+              && nu().fullDays == old().get('fullDays', 0) + 1
+              && nu().coins == old().coins + 35 + (weekFullNow() == 5 ? 50 : 0));
       }
       function earn() {
         return verified() && weekday()
           && nu().day == todayNum()
-          && nu().coins == old().coins + 50
+          && earnCoins()
           && nu().ratings.size() <= 5
           && ((old().day == todayNum() && nu().ratings.size() == old().ratings.size() + 1)
               || (old().day != todayNum() && nu().ratings.size() == 1));
       }
       function withdraw() {
         return verified()
+          && old().get('fullDays', 0) >= 5 && streakSame()
           && nu().ratings == old().ratings && nu().day == old().day
           && nu().coins < old().coins && nu().coins >= 0
           && nu().lastWithdrawal != old().get('lastWithdrawal', '')
@@ -39,7 +60,7 @@ service cloud.firestore {
       }
       function profileOnly() {
         return nu().coins == old().coins && nu().ratings == old().ratings && nu().day == old().day
-          && nu().get('lastWithdrawal', '') == old().get('lastWithdrawal', '');
+          && nu().get('lastWithdrawal', '') == old().get('lastWithdrawal', '') && streakSame();
       }
 
       allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
@@ -58,6 +79,7 @@ service cloud.firestore {
           && request.resource.data.coinsCost >= 500
           && request.resource.data.coinsCost == request.resource.data.amountCents
           && request.resource.data.method in ['airtime', 'ewallet', 'bank']
+          && getAfter(/databases/$(database)/documents/users/$(uid)).data.get('fullDays', 0) >= 5
           && getAfter(/databases/$(database)/documents/users/$(uid)).data.lastWithdrawal == wid;
         allow update: if isAdmin()
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'processedAt', 'note']);

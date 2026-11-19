@@ -13,7 +13,10 @@ const TRAILERS = [
   { title: "F1 The Movie", id: "CT2_P2DZBR0" }
 ];
 const DAILY = 5;
-const REWARD = 50;
+const REWARD = 10;        // coins per rated trailer
+const DAY_BONUS = 25;     // finishing all 5 trailers in a day
+const WEEK_BONUS = 50;    // 5 full days in one Mon-Fri week
+const UNLOCK_DAYS = 5;    // full days needed before the first withdrawal
 const WORDS = ["", "Not for me", "It's okay", "Pretty good", "Really good", "Must see"];
 const STAR_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5l2.9 6.1 6.6.8-4.9 4.6 1.3 6.6L12 17.3l-5.9 3.3 1.3-6.6-4.9-4.6 6.6-.8z"/></svg>';
 const METHODS = {
@@ -36,6 +39,9 @@ function nextWeekday() {
   do { d.setUTCDate(d.getUTCDate() + 1); } while (isWeekendDate(d));
   return d;
 }
+// Same week number as the rules: weeks start Monday, SA time.
+function weekNum(ms) { return Math.floor((Math.floor(((ms === undefined ? Date.now() : ms) + 7200000) / 86400000) + 3) / 7); }
+function weekFullOf(d) { return d && d.week === weekNum() ? d.weekFull || 0 : 0; }
 function fmtDay(d) { return DAYS[d.getUTCDay()] + ", " + d.getUTCDate() + " " + MONTHS[d.getUTCMonth()] + " " + d.getUTCFullYear(); }
 
 /* ---------- DOM helpers ---------- */
@@ -297,6 +303,7 @@ async function collect() {
   const t = TRAILERS[state.playIndex];
   const starsGiven = state.current;
   const ref = doc(db, "users", auth.currentUser.uid);
+  let earned = REWARD;
   try {
     await runTransaction(db, async (tx) => {
       const snap = await tx.get(ref);
@@ -309,12 +316,18 @@ async function collect() {
       if (prev.length >= DAILY) throw new GameError("done");
       if (prev.length !== state.playIndex) throw new GameError("out-of-sync");
       const entry = { id: t.id, stars: starsGiven };
-      tx.update(ref, {
-        day: today,
-        coins: d.coins + REWARD,
-        ratings: sameDay ? prev.concat([entry]) : [entry],
-        updatedAt: serverTimestamp()
-      });
+      const ratings = sameDay ? prev.concat([entry]) : [entry];
+      const upd = { day: today, coins: d.coins + REWARD, ratings: ratings, updatedAt: serverTimestamp() };
+      earned = REWARD;
+      if (ratings.length === DAILY) {
+        const wf = weekFullOf(d) + 1;
+        earned = REWARD + DAY_BONUS + (wf === 5 ? WEEK_BONUS : 0);
+        upd.coins = d.coins + earned;
+        upd.week = weekNum();
+        upd.weekFull = wf;
+        upd.fullDays = (d.fullDays || 0) + 1;
+      }
+      tx.update(ref, upd);
     });
   } catch (e) {
     const code = e && e.code;
@@ -329,7 +342,8 @@ async function collect() {
     c.textContent = "Collect " + REWARD + " coins";
     return;
   }
-  c.textContent = "+" + REWARD + " coins!";
+  c.textContent = "+" + earned + " coins!";
+  if (earned > REWARD) toast(earned >= REWARD + DAY_BONUS + WEEK_BONUS ? "Full week! +" + DAY_BONUS + " day bonus and +" + WEEK_BONUS + " week bonus" : "All 5 done! +" + DAY_BONUS + " day bonus");
   setTimeout(() => {
     state.playIndex++;
     if (state.playIndex < DAILY) { loadTrailer(); show("play"); }
@@ -347,7 +361,12 @@ function miniStars(n) {
 function cashout() {
   const r = todaysRatings();
   const sum = r.reduce((a, x) => a + x.stars, 0);
-  $("cash-total").textContent = r.length * REWARD;
+  let bonus = 0, weekDone = false;
+  if (r.length >= DAILY && udoc && udoc.day === todayNum()) {
+    weekDone = weekFullOf(udoc) === 5;
+    bonus = DAY_BONUS + (weekDone ? WEEK_BONUS : 0);
+  }
+  $("cash-total").textContent = r.length * REWARD + bonus;
   $("cash-avg").textContent = r.length ? (sum / r.length).toFixed(1) : "0.0";
   const body = $("recap");
   body.innerHTML = "";
@@ -361,6 +380,17 @@ function cashout() {
     tr.insertAdjacentHTML("beforeend", '<td data-label="Your stars">' + miniStars(x.stars) + '</td><td class="num" data-label="Coins">+' + REWARD + "</td>");
     body.appendChild(tr);
   });
+  const addRow = (label, n) => {
+    const tr = document.createElement("tr");
+    const th = document.createElement("th");
+    th.scope = "row";
+    th.textContent = label;
+    tr.appendChild(th);
+    tr.insertAdjacentHTML("beforeend", '<td data-label="Your stars"></td><td class="num" data-label="Coins">+' + n + "</td>");
+    body.appendChild(tr);
+  };
+  if (bonus) addRow("Daily bonus", DAY_BONUS);
+  if (weekDone) addRow("Full-week bonus", WEEK_BONUS);
   $("cash-next").textContent = "Your 5 trailers for today are done. Next trailers: " + fmtDay(nextWeekday());
   show("cashout");
 }
@@ -385,8 +415,12 @@ function updateWithdraw() {
   $("wd-amount").min = min;
   $("wd-amount").max = (coins / 100).toFixed(2);
   $("wd-amount-hint").textContent = "Minimum R" + min.toFixed(2) + " · up to " + rand(coins);
-  $("wd-short").textContent = need > 0 ? "You need " + need + " more coins" : "";
-  $("wd-submit").disabled = need > 0;
+  const days = udoc ? udoc.fullDays || 0 : 0;
+  const locked = days < UNLOCK_DAYS;
+  $("wd-short").textContent = locked
+    ? "Withdrawals unlock after " + UNLOCK_DAYS + " full days of trailers (" + days + " of " + UNLOCK_DAYS + " done). It's free."
+    : need > 0 ? "You need " + need + " more coins" : "";
+  $("wd-submit").disabled = locked || need > 0;
 }
 function openWithdraw() {
   if (!verifiedUser()) { show("verify"); return; }
@@ -497,6 +531,7 @@ $("wd-form").addEventListener("submit", async (ev) => {
       const snap = await tx.get(uref);
       if (!snap.exists()) throw new GameError("no-doc");
       const d = snap.data();
+      if ((d.fullDays || 0) < UNLOCK_DAYS) throw new GameError("locked");
       if (d.coins < cost) throw new GameError("insufficient");
       tx.set(wref, {
         method: m,
@@ -516,7 +551,7 @@ $("wd-form").addEventListener("submit", async (ev) => {
     busy(btn, false);
     const code = e && e.code;
     if (code === "insufficient") setErr("wd-amount", "That's more than your balance");
-    toast(code === "insufficient" ? "Not enough coins for that amount." : "Couldn't send your request. Please try again.");
+    toast(code === "insufficient" ? "Not enough coins for that amount." : code === "locked" ? "Withdrawals unlock after " + UNLOCK_DAYS + " full days of trailers." : "Couldn't send your request. Please try again.");
     updateWithdraw();
     return;
   }

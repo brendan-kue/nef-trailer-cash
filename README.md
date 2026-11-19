@@ -1,6 +1,6 @@
 # NEF Trailer Cash
 
-Watch 5 trailers a day (Mon-Fri, South Africa time), rate them, earn 50 coins each, withdraw (100 coins = R1).
+Watch 5 trailers a day (Mon-Fri, South Africa time), rate them, earn 10 coins each, +25 for finishing all 5 in a day, +50 for 5 full days in one week; withdraw (100 coins = R1) once the account has 5 full days (free unlock, no deposit).
 
 Live (main branch): https://brendan-kue.github.io/nef-trailer-cash/
 
@@ -32,7 +32,7 @@ This `firebase` branch moves accounts and coins to Firebase Authentication (emai
 
 ## How the data looks
 
-- `users/{uid}`: `{name, email, phone, coins, day, ratings, createdAt, updatedAt, lastWithdrawal?}`. `day` is a number `yyyymmdd` in South Africa time (UTC+2); `ratings` holds today's ratings only, `[{id: youtubeId, stars: 1-5}]`.
+- `users/{uid}`: `{name, email, phone, coins, day, ratings, createdAt, updatedAt, lastWithdrawal?, week?, weekFull?, fullDays?}`. `week` is the Monday-start week number (SA time), `weekFull` the full days in that week, `fullDays` the lifetime full days (withdrawals need 5). `day` is a number `yyyymmdd` in South Africa time (UTC+2); `ratings` holds today's ratings only, `[{id: youtubeId, stars: 1-5}]`.
 - `users/{uid}/withdrawals/{wid}`: `{method: 'airtime'|'ewallet'|'bank', detail, amountCents, coinsCost, status: 'Pending'|'Paid'|'Rejected', createdAt, processedAt?, note?}`.
 - `admins/{uid}`: exists = admin. Created by hand only.
 
